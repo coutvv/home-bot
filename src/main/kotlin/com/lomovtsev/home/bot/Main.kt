@@ -24,7 +24,7 @@ fun main() {
                 }
                 val text = message.text ?: return@message
                 if (!text.startsWith("magnet:?")) {
-                    bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet ссылку")
+                    bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet-ссылку")
                     return@message
                 }
 
