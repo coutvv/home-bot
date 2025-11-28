@@ -15,13 +15,15 @@ fun runSearching(torrentFile: File) {
     try {
         // 1. Парсим байты в структуру Map/List
         val decoded = BDecoder(data).decode() as Map<*, *>
-
-        val filesMap = decoded["files"] as? List<Map<String, Any>> ?: error("no files info")
         var result = 0L
-        for (f in filesMap) {
-            result += f["length"] as? Long ?: 0
-            
-            // here is also we have key = "path" with the name of the downloaded file path
+        if (decoded.contains("files")) {
+            val filesMap = decoded["files"] as? List<Map<String, Any>> ?: error("no files info")
+            for (f in filesMap) {
+                result += f["length"] as? Long ?: 0
+                // here is also we have key = "path" with the name of the downloaded file path
+            }
+        } else if (decoded.contains("length")) {
+            result = decoded["length"] as? Long ?: error("no length info")
         }
         println("Fucking SIZE of torrent IS: ${formatSize(result)}")
         return
