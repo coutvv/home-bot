@@ -56,6 +56,7 @@ fun pocGetTorrentFile(magnetLink: String) {
                 File(fileName).writeBytes(metadata)
                 println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> File size: ${metadata.size} bytes")
+                runSearching(File(fileName))
                 return
             } 
         } catch (e: Exception) {
