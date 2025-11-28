@@ -52,15 +52,14 @@ fun pocGetTorrentFile(magnetLink: String) {
             println("Connecting to $peer...")
             val metadata = downloadMetadataFromPeer(peer, infoHashBytes)
             if (metadata != null) {
-                val fileName = "$infoHashHex.torrent"
+                val fileName = "$infoHashHex.torrent.info"
                 File(fileName).writeBytes(metadata)
                 println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> File size: ${metadata.size} bytes")
                 return
-            } else {
-                println("Fucking empty metadata...")
-            }
+            } 
         } catch (e: Exception) {
+            e.printStackTrace()
             println("Failed with $peer: ${e.message}")
         }
     }
@@ -259,9 +258,13 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
                 val key = "ut_metadatai"
                 val idx = text.indexOf(key)
                 if (idx != -1) {
-                    val endIdx = text.indexOf("e", idx)
                     // Парсим ID (может быть 1, 2, 3...)
-                    val idStr = text.substring(idx + key.length, endIdx)
+                    val startIdx = idx + key.length
+                    val endIdx = text.indexOf("e", startIdx)
+                    if (startIdx > endIdx) {
+                        throw IllegalStateException("Fucking stupid start/end indexes $startIdx - $endIdx")
+                    }
+                    val idStr = text.substring(startIdx, endIdx)
                     metadataId = idStr.toInt()
 
                     // Request Metadata piece 0
