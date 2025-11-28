@@ -1,51 +1,52 @@
 package com.lomovtsev.home.bot.magnet
 
-import java.io.*
+import java.io.DataInputStream
+import java.io.EOFException
+import java.io.File
+import java.io.IOException
 import java.net.*
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.*
-import kotlin.experimental.and
-import kotlin.random.Random
 
 // --- КОНФИГУРАЦИЯ ---
 const val TIMEOUT_MS = 5_000
 
 fun pocGetTorrentFile(magnetLink: String) {
-    println(">>> Start Processing...")
+    println(">>> Start Processing HTTP Tracker...")
 
     // 1. Парсинг ссылки
     val infoHashHex = magnetLink.substringAfter("xt=urn:btih:").substringBefore("&")
     val infoHashBytes = hexToBytes(infoHashHex)
-    val encodedTrackerUrl = magnetLink.substringAfter("tr=").substringBefore("&")
-    val trackerUrl = URLDecoder.decode(encodedTrackerUrl, StandardCharsets.UTF_8.name())
-    val trackerUri = URI(trackerUrl)
-    
-    
+
+    // Вытаскиваем URL трекера
+    val trackerUrlRaw = magnetLink.substringAfter("tr=").substringBefore("&")
+    // В ссылке может быть URL-encoded символы, декодируем (напр. ://)
+    val trackerUrl = URLDecoder.decode(trackerUrlRaw, StandardCharsets.UTF_8.name())
 
     println("Target Hash: $infoHashHex")
-    val port = if (trackerUri.port == -1) {
-        80
-    } else {
-        trackerUri.port
-    }
-    println("Tracker: ${trackerUri.host}:${port}")
+    println("Tracker URL: $trackerUrl")
 
-    // 2. Получаем пиров с UDP трекера
+    // 2. Получаем пиров (HTTP)
     val peers = try {
-        getPeersFromHttpTracker(trackerUri.host, infoHashBytes)
+        if (trackerUrl.startsWith("http")) {
+            getPeersFromHttpTracker(trackerUrl, infoHashBytes)
+        } else {
+            println("Это не HTTP трекер!")
+            return
+        }
     } catch (e: Exception) {
-        println("Tracker failed: ${e.message}")
+        println("Tracker failed: $e")
+        e.printStackTrace()
         return
     }
 
     if (peers.isEmpty()) {
-        println("No peers found.")
+        println("No peers found on tracker.")
         return
     }
     println("Found ${peers.size} peers. Trying to fetch metadata...")
 
-    // 3. Пробуем скачать Metadata (BEP 9/10)
+    // 3. Пробуем скачать Metadata (P2P часть осталась той же)
     for (peer in peers) {
         try {
             println("Connecting to $peer...")
@@ -53,9 +54,11 @@ fun pocGetTorrentFile(magnetLink: String) {
             if (metadata != null) {
                 val fileName = "$infoHashHex.torrent"
                 File(fileName).writeBytes(metadata)
-                println("\n>>> SUCCESS! Saved to: $fileName")
+                println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> File size: ${metadata.size} bytes")
                 return
+            } else {
+                println("Fucking empty metadata...")
             }
         } catch (e: Exception) {
             println("Failed with $peer: ${e.message}")
@@ -63,6 +66,9 @@ fun pocGetTorrentFile(magnetLink: String) {
     }
     println("Could not download metadata from any peer.")
 }
+
+
+// --- ЧАСТЬ 1: HTTP TRACKER CLIENT ---
 
 fun getPeersFromHttpTracker(announceUrl: String, infoHash: ByteArray): List<InetSocketAddress> {
     // 1. Формируем URL с параметрами
@@ -152,190 +158,6 @@ fun getPeersFromHttpTracker(announceUrl: String, infoHash: ByteArray): List<Inet
     return result
 }
 
-// --- ЧАСТЬ 1: UDP TRACKER PROTOCOL ---
-
-fun getPeersFromUdpTracker(host: String, port: Int, infoHash: ByteArray): List<InetSocketAddress> {
-    val socket = DatagramSocket()
-    socket.soTimeout = TIMEOUT_MS
-    val address = InetAddress.getByName(host)
-
-    // A. Connection Request
-    val transactionId = Random.nextInt()
-    val connReq = ByteBuffer.allocate(16)
-    connReq.putLong(0x41727101980) // Protocol ID
-    connReq.putInt(0) // Action: Connect
-    connReq.putInt(transactionId)
-
-    sendUdp(socket, connReq.array(), address, port)
-    val connResp = receiveUdp(socket, 16)
-
-    connResp.getInt() // action
-    if (connResp.getInt() != transactionId) throw IOException("Wrong transaction ID")
-    val connectionId = connResp.getLong()
-
-    // B. Announce Request
-    val announceReq = ByteBuffer.allocate(98)
-    announceReq.putLong(connectionId)
-    announceReq.putInt(1) // Action: Announce
-    announceReq.putInt(transactionId)
-    announceReq.put(infoHash)
-    announceReq.put(ByteArray(20) { 0.toByte() }) // Peer ID (fake)
-    announceReq.putLong(0) // Downloaded
-    announceReq.putLong(0) // Left
-    announceReq.putLong(0) // Uploaded
-    announceReq.putInt(2) // Event: None
-    announceReq.putInt(0) // IP
-    announceReq.putInt(0) // Key
-    announceReq.putInt(-1) // Num want
-    announceReq.putShort(port.toShort())
-
-    sendUdp(socket, announceReq.array(), address, port)
-    val announceResp = receiveUdp(socket, 1024)
-
-    announceResp.getInt() // Action
-    announceResp.getInt() // Transaction ID
-    announceResp.getInt() // Interval
-    announceResp.getInt() // Leechers
-    announceResp.getInt() // Seeders
-
-    val peers = mutableListOf<InetSocketAddress>()
-    while (announceResp.remaining() >= 6) {
-        val ipBytes = ByteArray(4)
-        announceResp.get(ipBytes)
-        val portPeer = announceResp.short.toInt() and 0xFFFF
-        peers.add(InetSocketAddress(InetAddress.getByAddress(ipBytes), portPeer))
-    }
-    return peers
-}
-
-fun sendUdp(socket: DatagramSocket, data: ByteArray, address: InetAddress, port: Int) {
-    val packet = DatagramPacket(data, data.size, address, port)
-    socket.send(packet)
-}
-
-fun receiveUdp(socket: DatagramSocket, size: Int): ByteBuffer {
-    val buffer = ByteArray(size)
-    val packet = DatagramPacket(buffer, buffer.size)
-    socket.receive(packet)
-    return ByteBuffer.wrap(packet.data, 0, packet.length)
-}
-
-// --- ЧАСТЬ 2: TCP PEER WIRE PROTOCOL (BEP 9 & 10) ---
-
-fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): ByteArray? {
-    val socket = Socket()
-    socket.connect(peer, TIMEOUT_MS)
-    val input = DataInputStream(socket.getInputStream())
-    val output = socket.getOutputStream()
-
-    // 1. Handshake
-    // 8 байт reserved. 20-й бит (0x10 в 5-м байте справа) означает Extension Protocol
-    val reserved = ByteArray(8)
-    reserved[5] = 0x10.toByte()
-
-    val handshake = ByteBuffer.allocate(68)
-    handshake.put(19.toByte())
-    handshake.put("BitTorrent protocol".toByteArray())
-    handshake.put(reserved)
-    handshake.put(infoHash)
-    handshake.put("-KT1000-000000000000".toByteArray()) // Fake Client ID
-
-    output.write(handshake.array())
-
-    // Читаем ответный Handshake
-    val responseHandshake = ByteArray(68)
-    input.readFully(responseHandshake)
-
-    // Проверка поддержки расширений (Extension bit)
-    if ((responseHandshake[25].toInt() and 0x10) == 0) {
-        socket.close()
-        throw IOException("Peer doesn't support extensions")
-    }
-
-    // 2. Отправляем Extended Handshake
-    // Это словарь BEncoded. Говорим, что мы умеем metadata (ID 1)
-    val extHandshakeMsg = "d1:md11:ut_metadatai1eee"
-    val extBody = extHandshakeMsg.toByteArray()
-
-    val extPacket = ByteBuffer.allocate(4 + 1 + 1 + extBody.size)
-    extPacket.putInt(1 + 1 + extBody.size) // Length
-    extPacket.put(20.toByte()) // ID для Extension Protocol = 20
-    extPacket.put(0.toByte()) // ID для Handshake payload = 0
-    extPacket.put(extBody)
-
-    output.write(extPacket.array())
-
-    // 3. Читаем сообщения, пока не получим ответный Extended Handshake
-    var metadataId = -1
-
-    // Простой цикл чтения сообщений
-    while (socket.isConnected) {
-        val len = input.readInt()
-        if (len == 0) continue // Keep-alive
-
-        val msgId = input.readByte().toInt()
-
-        if (msgId == 20) { // Это Extension сообщение
-            val extMsgId = input.readByte().toInt()
-            val payload = ByteArray(len - 2)
-            input.readFully(payload)
-
-            if (extMsgId == 0) { // Это Handshake ответ
-                val text = String(payload)
-                // Грязный хак: ищем "ut_metadata" и число после него. 
-                // В BEncode это выглядит как 11:ut_metadatai<ID>e
-                val key = "ut_metadatai"
-                val idx = text.indexOf(key)
-                if (idx != -1) {
-                    val endIdx = text.indexOf("e", idx)
-                    metadataId = text.substring(idx + key.length, endIdx).toInt()
-
-                    // Узнали ID, запрашиваем метаданные (кусок 0)
-                    // Сообщение: d8:msg_typei0e5:piecei0ee -> {"msg_type": 0, "piece": 0}
-                    val req = "d8:msg_typei0e5:piecei0ee".toByteArray()
-                    val reqPacket = ByteBuffer.allocate(4 + 1 + 1 + req.size)
-                    reqPacket.putInt(1 + 1 + req.size)
-                    reqPacket.put(20.toByte())
-                    reqPacket.put(metadataId.toByte())
-                    reqPacket.put(req)
-                    output.write(reqPacket.array())
-                }
-            } else if (extMsgId == 1) { // Это DATA (ответ на запрос метаданных)
-                // Формат: BEncoded Dictionary + Raw Info Bytes
-                // Нужно найти конец словаря "ee" и всё что после — это файл
-                val str = String(payload, StandardCharsets.ISO_8859_1)
-                val splitMark = "ee"
-                val splitIdx = str.indexOf(splitMark)
-
-                if (splitIdx != -1) {
-                    // Возвращаем чистые байты метаданных
-                    val rawDataStart = splitIdx + 2
-                    return@downloadMetadataFromPeer payload.copyOfRange(rawDataStart, payload.size)
-                }
-            }
-        } else {
-            // Пропускаем обычные сообщения (BitField, Have и т.д.)
-            if (len > 1) {
-                input.skipBytes(len - 1)
-            }
-        }
-    }
-    socket.close()
-    return null
-}
-
-// Утилита: Hex String -> ByteArray
-fun hexToBytes(hex: String): ByteArray {
-    val result = ByteArray(hex.length / 2)
-    for (i in result.indices) {
-        val index = i * 2
-        val j = Integer.parseInt(hex.substring(index, index + 2), 16)
-        result[i] = j.toByte()
-    }
-    return result
-}
-
-
 // Утилита для поиска подмассива (indexOf для byte[])
 fun findByteArray(source: ByteArray, match: ByteArray): Int {
     if (match.isEmpty()) return -1
@@ -350,4 +172,143 @@ fun findByteArray(source: ByteArray, match: ByteArray): Int {
         if (found) return i
     }
     return -1
+}
+
+// --- ЧАСТЬ 2: TCP PEER WIRE (Без изменений, скопировано для автономности файла) ---
+
+fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): ByteArray? {
+    val socket = Socket()
+    try {
+        socket.connect(peer, 3000) // Быстрый коннект
+    } catch (e: Exception) {
+        println("Peer is DEAD: ${peer.hostName}")
+        return null // Пир мертв
+    }
+
+    val input = DataInputStream(socket.getInputStream())
+    val output = socket.getOutputStream()
+
+    // 1. Handshake
+    val reserved = ByteArray(8)
+    reserved[5] = 0x10.toByte() // Extension bit
+
+    val handshake = ByteBuffer.allocate(68)
+    handshake.put(19.toByte())
+    handshake.put("BitTorrent protocol".toByteArray())
+    handshake.put(reserved)
+    handshake.put(infoHash)
+    handshake.put("-KT1000-000000000000".toByteArray())
+
+    output.write(handshake.array())
+    output.flush()
+
+    val responseHandshake = ByteArray(68)
+    try {
+        input.readFully(responseHandshake)
+    } catch (e: EOFException) { 
+        println("handshake can't read")
+        return null 
+    }
+
+    if ((responseHandshake[25].toInt() and 0x10) == 0) {
+        socket.close()
+        throw IOException("Peer doesn't support extensions")
+    }
+
+    // 2. Ext Handshake
+    val extHandshakeMsg = "d1:md11:ut_metadatai1eee"
+    val extBody = extHandshakeMsg.toByteArray()
+
+    val extPacket = ByteBuffer.allocate(4 + 1 + 1 + extBody.size)
+    extPacket.putInt(1 + 1 + extBody.size)
+    extPacket.put(20.toByte())
+    extPacket.put(0.toByte())
+    extPacket.put(extBody)
+
+    output.write(extPacket.array())
+    output.flush()
+
+    // 3. Loop
+    var metadataId = -1
+    val buffer = ByteArray(65535) // Буфер чтения
+
+    val startTime = System.currentTimeMillis()
+
+    // Упрощенный цикл чтения (читаем кусками и анализируем)
+    while (socket.isConnected && (System.currentTimeMillis() - startTime < 10_000)) {
+        if (input.available() < 4) {
+            Thread.sleep(100)
+            continue
+        }
+
+        val len = input.readInt()
+        if (len <= 0) {
+            continue
+        }
+
+        val msgId = input.readByte().toInt()
+
+        if (msgId == 20) { // Extension
+            val extMsgId = input.readByte().toInt()
+            val payloadLen = len - 2
+            val payload = ByteArray(payloadLen)
+            input.readFully(payload)
+
+            if (extMsgId == 0) { // Handshake response
+                val text = String(payload, StandardCharsets.ISO_8859_1)
+                val key = "ut_metadatai"
+                val idx = text.indexOf(key)
+                if (idx != -1) {
+                    val endIdx = text.indexOf("e", idx)
+                    // Парсим ID (может быть 1, 2, 3...)
+                    val idStr = text.substring(idx + key.length, endIdx)
+                    metadataId = idStr.toInt()
+
+                    // Request Metadata piece 0
+                    val req = "d8:msg_typei0e5:piecei0ee".toByteArray()
+                    val reqPacket = ByteBuffer.allocate(4 + 1 + 1 + req.size)
+                    reqPacket.putInt(1 + 1 + req.size)
+                    reqPacket.put(20.toByte())
+                    reqPacket.put(metadataId.toByte())
+                    reqPacket.put(req)
+                    output.write(reqPacket.array())
+                    output.flush()
+                }
+            } else if (extMsgId == 1) { // Payload data
+                val str = String(payload, StandardCharsets.ISO_8859_1)
+                val splitMark = "ee"
+                val splitIdx = str.indexOf(splitMark)
+
+                if (splitIdx != -1) {
+                    socket.close()
+                    val rawDataStart = splitIdx + 2
+                    println("sort of not null result")
+                    return payload.copyOfRange(rawDataStart, payload.size)
+                }
+            }
+        } else {
+            // Skip other messages
+            if (len > 1) {
+                // skipBytes не всегда пропускает всё, лучше читать
+                val skip = len - 1
+                var skippedTotal = 0L
+                while (skippedTotal < skip) {
+                    skippedTotal += input.skip(skip - skippedTotal)
+                }
+            }
+        }
+    }
+    socket.close()
+    println("Fully cycled - no result")
+    return null
+}
+
+fun hexToBytes(hex: String): ByteArray {
+    val result = ByteArray(hex.length / 2)
+    for (i in result.indices) {
+        val index = i * 2
+        val j = Integer.parseInt(hex.substring(index, index + 2), 16)
+        result[i] = j.toByte()
+    }
+    return result
 }
