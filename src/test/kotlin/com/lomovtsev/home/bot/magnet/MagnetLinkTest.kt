@@ -49,4 +49,11 @@ class MagnetLinkTest {
         pocGetTorrentFile(link)
     }
 
+    @Test
+    fun testMovieTorrent() {
+        val link = "magnet:?xt=urn:btih:E9DBCF5CDA56175CB78344C0400E1EEACBBB8F94&tr=http%3A%2F%2Fbt4.t-ru.org%2Fann%3Fmagnet&dn=%D0%9C%D0%B0%D1%82%D1%80%D0%B8%D1%86%D0%B0%3A%20%D0%A0%D0%B5%D0%B2%D0%BE%D0%BB%D1%8E%D1%86%D0%B8%D1%8F%20%2F%20The%20Matrix%3A%20Revolutions%20(%D0%AD%D0%BD%D0%B4%D0%B8%20%D0%92%D0%B0%D1%87%D0%BE%D0%B2%D1%81%D0%BA%D0%B8%2C%20%D0%9B%D0%B0%D1%80%D1%80%D0%B8%20%D0%92%D0%B0%D1%87%D0%BE%D0%B2%D1%81%D0%BA%D0%B8%20%2F%20Andy%20Wachowski%2C%20Larry%20Wachowski)%20%5B2003%2C%20%D0%A1%D0%A8%D0%90%2C%20%D1%84%D0%B0%D0%BD%D1%82%D0%B0%D1%81%D1%82%D0%B8%D0%BA%D0%B0%2C%20%D0%B1%D0%BE%D0%B5%D0%B2%D0%B8%D0%BA%2C%20WEB-DLR"
+
+        pocGetTorrentFile(link)
+    }
+
 }

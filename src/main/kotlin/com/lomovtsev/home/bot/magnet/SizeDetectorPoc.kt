@@ -23,6 +23,7 @@ fun runSearching(torrentFile: File) {
                 // here is also we have key = "path" with the name of the downloaded file path
             }
         } else if (decoded.contains("length")) {
+            println("Solo Length")
             result = decoded["length"] as? Long ?: error("no length info")
         }
         println("Fucking SIZE of torrent IS: ${formatSize(result)}")
