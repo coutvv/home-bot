@@ -14,7 +14,9 @@ data class MagnetLink(
     }
     
     fun getTorrentFile(): TorrentFile {
-        return TorrentFile("empty")
+        val torrentFileBytes = pocGetTorrentFile(origin)
+        
+        error("TODO")
     }
     
     fun getHashHexBytes(): ByteArray {
@@ -29,12 +31,6 @@ data class MagnetLink(
     }
     
     fun getHashHex(): String = xt!!.split("btih:").last()
-}
-
-data class TorrentFile(
-    val name: String,
-) {
-    
 }
 
 fun parseMagnet(uri: String): MagnetLink {

@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets
 
 const val TIMEOUT_MS = 5_000
 
-fun pocGetTorrentFile(magnetLinkRaw: String) {
+fun pocGetTorrentFile(magnetLinkRaw: String): ByteArray {
     println(">>> Start Processing HTTP Tracker...")
 
     val magnetLink = parseMagnet(magnetLinkRaw)
@@ -30,18 +30,14 @@ fun pocGetTorrentFile(magnetLinkRaw: String) {
         if (trackerUrl.startsWith("http")) {
             getPeersFromHttpTracker(trackerUrl, infoHashBytes)
         } else {
-            println("Это не HTTP трекер!")
-            return
+            error("Это не HTTP трекер!")
         }
     } catch (e: Exception) {
-        println("Tracker failed: $e")
-        e.printStackTrace()
-        return
+        error(e)
     }
 
     if (peers.isEmpty()) {
-        println("No peers found on tracker.")
-        return
+        error("No peers found on tracker.")
     }
     println("Found ${peers.size} peers. Trying to fetch metadata...")
 
@@ -49,22 +45,21 @@ fun pocGetTorrentFile(magnetLinkRaw: String) {
     for (peer in peers) {
         try {
             println("Connecting to $peer...")
-            val metadata = downloadMetadataFromPeer(peer, infoHashBytes)
-            if (metadata != null) {
+            val metadataBytes = downloadMetadataFromPeer(peer, infoHashBytes)
+            if (metadataBytes != null) {
                 // TODO: change name to torrent content
                 val fileName = "${magnetLink.getHashHex()}.torrent.info"
-                File(fileName).writeBytes(metadata)
+                File(fileName).writeBytes(metadataBytes)
                 println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
-                println(">>> File size: ${metadata.size} bytes")
-                runSearching(File(fileName))
-                return
+                println(">>> Metadata file size: ${metadataBytes.size} bytes")
+                findContentSize(File(fileName))
+                return metadataBytes
             } 
         } catch (e: Exception) {
-            e.printStackTrace()
             println("Failed with $peer: ${e.message}")
         }
     }
-    println("Could not download metadata from any peer.")
+    error("Could not download metadata from any peer.")
 }
 
 
@@ -206,8 +201,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     try {
         input.readFully(responseHandshake)
     } catch (e: EOFException) { 
-        println("handshake can't read")
-        return null 
+        error(e)
     }
 
     if ((responseHandshake[25].toInt() and 0x10) == 0) {
