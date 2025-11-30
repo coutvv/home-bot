@@ -1,9 +1,6 @@
 package com.lomovtsev.home.bot.magnet
 
 import java.net.URLDecoder
-import com.turn.ttorrent.client.Client
-import com.turn.ttorrent.client.SharedTorrent
-import java.net.InetAddress
 
 data class MagnetLink(
     val origin: String,
@@ -11,6 +8,7 @@ data class MagnetLink(
     val dn: String?,
     val tr: List<String>
 ) {
+    
     fun getTorrentSize(): Long {
         return 0L
     }

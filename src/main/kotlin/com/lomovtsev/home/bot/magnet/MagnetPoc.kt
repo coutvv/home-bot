@@ -8,7 +8,6 @@ import java.net.*
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
-// --- КОНФИГУРАЦИЯ ---
 const val TIMEOUT_MS = 5_000
 
 fun pocGetTorrentFile(magnetLink: String) {
