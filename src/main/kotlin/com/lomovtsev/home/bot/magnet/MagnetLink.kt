@@ -16,6 +16,19 @@ data class MagnetLink(
     fun getTorrentFile(): TorrentFile {
         return TorrentFile("empty")
     }
+    
+    fun getHashHexBytes(): ByteArray {
+        val hashHex = getHashHex()
+        val result = ByteArray(hashHex.length / 2)
+        for (i in result.indices) {
+            val index = i * 2
+            val j = Integer.parseInt(hashHex.substring(index, index + 2), 16)
+            result[i] = j.toByte()
+        }
+        return result
+    }
+    
+    fun getHashHex(): String = xt!!.split("btih:").last()
 }
 
 data class TorrentFile(

@@ -10,19 +10,19 @@ import java.nio.charset.StandardCharsets
 
 const val TIMEOUT_MS = 5_000
 
-fun pocGetTorrentFile(magnetLink: String) {
+fun pocGetTorrentFile(magnetLinkRaw: String) {
     println(">>> Start Processing HTTP Tracker...")
 
+    val magnetLink = parseMagnet(magnetLinkRaw)
+
     // 1. Парсинг ссылки
-    val infoHashHex = magnetLink.substringAfter("xt=urn:btih:").substringBefore("&")
-    val infoHashBytes = hexToBytes(infoHashHex)
+    val infoHashBytes = magnetLink.getHashHexBytes()
 
     // Вытаскиваем URL трекера
-    val trackerUrlRaw = magnetLink.substringAfter("tr=").substringBefore("&")
+    val trackerUrlRaw = magnetLink.tr.first()
     // В ссылке может быть URL-encoded символы, декодируем (напр. ://)
     val trackerUrl = URLDecoder.decode(trackerUrlRaw, StandardCharsets.UTF_8.name())
 
-    println("Target Hash: $infoHashHex")
     println("Tracker URL: $trackerUrl")
 
     // 2. Получаем пиров (HTTP)
@@ -51,7 +51,8 @@ fun pocGetTorrentFile(magnetLink: String) {
             println("Connecting to $peer...")
             val metadata = downloadMetadataFromPeer(peer, infoHashBytes)
             if (metadata != null) {
-                val fileName = "$infoHashHex.torrent.info"
+                // TODO: change name to torrent content
+                val fileName = "${magnetLink.getHashHex()}.torrent.info"
                 File(fileName).writeBytes(metadata)
                 println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> File size: ${metadata.size} bytes")
@@ -229,7 +230,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
 
     // 3. Loop
     var metadataId = -1
-    val buffer = ByteArray(65535) // Буфер чтения
+    ByteArray(65535) // Буфер чтения
 
     val startTime = System.currentTimeMillis()
 
