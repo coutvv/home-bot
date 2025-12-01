@@ -48,7 +48,6 @@ fun pocGetTorrentFile(magnetLinkRaw: String): ByteArray {
             val metadataBytes = downloadMetadataFromPeer(peer, infoHashBytes)
             if (metadataBytes != null) {
                 println(">>> Metadata file size: ${metadataBytes.size} bytes")
-//                findContentSize(File(fileName))
                 return metadataBytes
             } 
         } catch (e: Exception) {
@@ -220,7 +219,6 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
 
     // 3. Loop
     var metadataId = -1
-    ByteArray(65535) // Буфер чтения
 
     val startTime = System.currentTimeMillis()
 
