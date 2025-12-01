@@ -6,8 +6,8 @@ import java.io.File
 
 class BDecoderTest {
     @Test
-    fun decodeTest() {
-        val url = BDecoderTest::class.java.classLoader.getResource("torrents/ready.torrent")!!
+    fun decodeTestLargeFile() {
+        val url = BDecoderTest::class.java.classLoader.getResource("torrents/legendary.torrent")!!
         val file = File(url.toURI())
 
         val torrentBytes = file.readBytes()
@@ -15,6 +15,7 @@ class BDecoderTest {
         val decode = BDecoder(torrentBytes).decode() as Map<*, *>
         val info = decode["info"] as Map<*, *>
         
-        Assertions.assertTrue(info.containsKey("name"))
+        val name = String(info["name"] as ByteArray, UTF8)
+        Assertions.assertEquals("Мундольф (Сезоны 1-5)", name)
     }
 }
