@@ -3,7 +3,13 @@ package com.lomovtsev.home.bot.magnet
 data class TorrentFile(
     val name: String,
     val size: Long, // in bytes
-)
+) {
+    fun getBeautifulSize(): String {
+        if (size < 1024) return "$size B"
+        val z = (63 - java.lang.Long.numberOfLeadingZeros(size)) / 10
+        return String.format("%.1f %sB", size.toDouble() / (1L shl (z * 10)), " KMGTPE"[z])
+    }
+}
 
 private const val defaultName = "No Name Torrent"
 
