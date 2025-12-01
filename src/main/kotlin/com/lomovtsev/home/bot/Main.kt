@@ -4,6 +4,7 @@ import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
+import com.lomovtsev.home.bot.magnet.parseMagnet
 
 val masterIds = setOf(127769371L, 321992164L)
 
@@ -28,14 +29,27 @@ fun main() {
                     return@message
                 }
 
-                val ok = qbitClient.addTorrent(text)
-                bot.sendMessage(
-                    chatId = ChatId.fromId(message.chat.id),
-                    text = if (ok) "Добавил" else "Ошибка"
-                )
+                val responseMessage = tryAddTorrent(qbitClient, text)
+                bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = responseMessage)
             }
         }
     }
     println("Bot created and started!")
     bot.startPolling()
+}
+
+fun tryAddTorrent(qbitClient: QBitClient, text: String): String {
+
+    val ok = qbitClient.addTorrent(text) // TODO: check the size of free space
+    if (!ok) {
+        return "Ошибка, братишка!"
+    }
+    try {
+        val magnetLink = parseMagnet(text)
+        val torrentFile = magnetLink.getTorrentFile()
+        return "Добавил файлик: ${torrentFile.name} \n" +
+                "Размер: ${torrentFile.getBeautifulSize()}"
+    } catch (e: Exception) {
+        return "Не смог распарсить, но добавил в загрузочки. Ошибка:\n${e.message}"
+    }
 }
