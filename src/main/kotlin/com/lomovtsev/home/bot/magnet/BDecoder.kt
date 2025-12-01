@@ -9,7 +9,7 @@ class BDecoder(private val data: ByteArray) {
     private var ptr = 0
 
     fun decode(): Any {
-        if (ptr >= data.size) throw EOFException()
+        if (ptr >= data.size) throw IllegalStateException("Unexpected end of B-Encoded data")
         val char = data[ptr].toInt().toChar()
         println("DECODE point: $ptr \t|\t char: $char")
         return when (char) {

@@ -2,10 +2,10 @@ package com.lomovtsev.home.bot.magnet
 
 data class TorrentFile(
     val name: String,
-    val size: Long, // bytes
-) {
-    
-}
+    val size: Long, // in bytes
+)
+
+private const val defaultName = "No Name Torrent"
 
 fun parseTorrentFile(bytes: ByteArray): TorrentFile {
 
@@ -13,9 +13,8 @@ fun parseTorrentFile(bytes: ByteArray): TorrentFile {
     
     val info = decodedFile["info"] as Map<*, *>
     
-    println("Torrent base info: ${info.keys}")
     if (info.containsKey("length")) { // single file torrent
-        val nameBytes = info["name"] as? ByteArray ?: "No Torrent Name".toByteArray()
+        val nameBytes = info["name"] as? ByteArray ?: defaultName.toByteArray()
         val size = info["length"] as? Long ?: 0L
         return TorrentFile(String(nameBytes, UTF8), size)
     } else if (info.containsKey("files")) {
@@ -25,10 +24,9 @@ fun parseTorrentFile(bytes: ByteArray): TorrentFile {
             file as Map<*, *>
             resultSize += file["length"] as Long
         }
-        val name = info["name"] as? ByteArray ?: "Big Torrent / Not found name".toByteArray()
+        val name = info["name"] as? ByteArray ?: defaultName.toByteArray()
         return TorrentFile(String(name, UTF8), resultSize)
     }
     
-//    return TorrentFile("", )
-    error("meh")
+    error("Can't parse torrent file")
 }
