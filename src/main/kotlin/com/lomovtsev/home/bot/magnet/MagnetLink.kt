@@ -3,7 +3,6 @@ package com.lomovtsev.home.bot.magnet
 import java.io.File
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
-import java.util.stream.Stream
 
 data class MagnetLink(
     val origin: String,
@@ -11,10 +10,6 @@ data class MagnetLink(
     val dn: String?,
     val tr: List<String>
 ) {
-    
-    fun getTorrentSize(): Long {
-        return 0L
-    }
     
     val prefix = "d4:info".toByteArray(StandardCharsets.ISO_8859_1)
     val suffix = "e".toByteArray(StandardCharsets.ISO_8859_1)
@@ -26,7 +21,14 @@ data class MagnetLink(
 
         val fileName = "${getHashHex()}.torrent"
         File(fileName).writeBytes(result)
+        writeOrigin(torrentFileBytes)
         return parseTorrentFile(result)
+    }
+    
+    private fun writeOrigin(bytes: ByteArray) {
+
+        val fileName = "${getHashHex()}-origin.torrent"
+        File(fileName).writeBytes(bytes)
     }
     
     fun getHashHexBytes(): ByteArray {

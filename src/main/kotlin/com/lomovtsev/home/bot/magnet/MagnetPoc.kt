@@ -47,10 +47,6 @@ fun pocGetTorrentFile(magnetLinkRaw: String): ByteArray {
             println("Connecting to $peer...")
             val metadataBytes = downloadMetadataFromPeer(peer, infoHashBytes)
             if (metadataBytes != null) {
-                // TODO: change name to torrent content
-                val fileName = "${magnetLink.getHashHex()}.torrent.info"
-                File(fileName).writeBytes(metadataBytes)
-                println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> Metadata file size: ${metadataBytes.size} bytes")
 //                findContentSize(File(fileName))
                 return metadataBytes
@@ -305,14 +301,4 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     }
     println("Fully cycled - no result")
     return null
-}
-
-fun hexToBytes(hex: String): ByteArray {
-    val result = ByteArray(hex.length / 2)
-    for (i in result.indices) {
-        val index = i * 2
-        val j = Integer.parseInt(hex.substring(index, index + 2), 16)
-        result[i] = j.toByte()
-    }
-    return result
 }
