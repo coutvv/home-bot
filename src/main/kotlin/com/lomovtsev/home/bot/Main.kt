@@ -5,6 +5,7 @@ import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
 import com.lomovtsev.home.bot.magnet.parseMagnet
+import java.io.File
 
 val masterIds = setOf(127769371L, 321992164L)
 
@@ -28,7 +29,7 @@ fun main() {
                     bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet-ссылку")
                     return@message
                 }
-
+                bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Ща попробую добавить...")
                 val responseMessage = tryAddTorrent(qbitClient, text)
                 bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = responseMessage)
             }
@@ -40,16 +41,26 @@ fun main() {
 
 fun tryAddTorrent(qbitClient: QBitClient, text: String): String {
 
-    val ok = qbitClient.addTorrent(text) // TODO: check the size of free space
-    if (!ok) {
-        return "Ошибка, братишка!"
-    }
     try {
         val magnetLink = parseMagnet(text)
         val torrentFile = magnetLink.getTorrentFile()
+        if (torrentFile.size > getFreeSpace() - oneGigabyte) {
+            return "Не могу слишком большой файл! Места нет"
+        }
+        val ok = qbitClient.addTorrent(text) 
+        if (!ok) {
+            return "Ошибка, братишка! Что-то с QBittorrent'ом"
+        }
         return "Добавил файлик: ${torrentFile.name} \n" +
                 "Размер: ${torrentFile.getBeautifulSize()}"
     } catch (e: Exception) {
         return "Не смог распарсить, но добавил в загрузочки. Ошибка:\n${e.message}"
     }
 }
+
+fun getFreeSpace(): Long {
+    val file = File("/")
+    return file.freeSpace
+}
+
+const val oneGigabyte = 1024*1024*1024

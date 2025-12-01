@@ -49,7 +49,7 @@ fun pocGetTorrentFile(magnetLinkRaw: String): ByteArray {
             if (metadataBytes != null) {
                 println(">>> Metadata file size: ${metadataBytes.size} bytes")
                 return metadataBytes
-            } 
+            }
         } catch (e: Exception) {
             println("Failed with $peer: ${e.message}")
         }
@@ -74,7 +74,8 @@ fun getPeersFromHttpTracker(announceUrl: String, infoHash: ByteArray): List<Inet
 
     // compact=1 заставляет трекер вернуть пиров в бинарном виде (6 байт на пира), а не списком словарей
     val separator = if (announceUrl.contains("?")) "&" else "?"
-    val finalUrl = "$announceUrl${separator}info_hash=$encodedHash&peer_id=$peerId&port=$port&uploaded=0&downloaded=0&left=0&compact=1&event=started"
+    val finalUrl =
+        "$announceUrl${separator}info_hash=$encodedHash&peer_id=$peerId&port=$port&uploaded=0&downloaded=0&left=0&compact=1&event=started"
 
     println("Requesting: $finalUrl")
 
@@ -195,7 +196,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     val responseHandshake = ByteArray(68)
     try {
         input.readFully(responseHandshake)
-    } catch (e: EOFException) { 
+    } catch (e: EOFException) {
         error(e)
     }
 
@@ -221,7 +222,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     var metadataId = -1
 
     val startTime = System.currentTimeMillis()
-    
+
     val parts = mutableListOf<ByteArray>()
 
     // Буфер для сборки итогового файла
@@ -230,11 +231,11 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     var totalPieces = 0
 
     // Упрощенный цикл чтения (читаем кусками и анализируем)
-    while (socket.isConnected && (System.currentTimeMillis() - startTime < 10_000)) {
+    // TODO: replace timeout with  other approach
+    while (socket.isConnected && (System.currentTimeMillis() - startTime < 30_000)) {
         val available = input.available()
         if (available < 4) {
             Thread.sleep(100)
-            println("available is lower than 4: $available")
             continue
         }
 
@@ -245,7 +246,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
         }
 
         val msgId = input.readByte().toInt()
-        
+
         if (msgId == 20) { // Extension
             val extMsgId = input.readByte().toInt()
             val payloadLen = len - 2 // минус два потому что считали 2 байта перед этим
@@ -269,13 +270,13 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
 
                     val decodedPayload = BDecoder(payload).decode() as Map<*, *>
                     val metadataSize = decodedPayload["metadata_size"] as? Long ?: 0L
-                    
+
                     // Инициализируем буфер
                     finalMetadataBuffer = ByteArray(metadataSize.toInt())
                     // Считаем сколько кусков по 16кб нам нужно
                     totalPieces = ceil(metadataSize.toDouble() / METADATA_BLOCK_SIZE).toInt()
                     println("Total pieces to download: $totalPieces")
-                    
+
                     // Request Metadata piece 0
                     requestMetadataPiece(output, metadataId, 0)
                 }
