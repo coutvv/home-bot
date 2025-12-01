@@ -2,7 +2,6 @@ package com.lomovtsev.home.bot.magnet
 
 import java.io.DataInputStream
 import java.io.EOFException
-import java.io.File
 import java.io.IOException
 import java.net.*
 import java.nio.ByteBuffer
@@ -221,17 +220,21 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     var metadataId = -1
 
     val startTime = System.currentTimeMillis()
+    
+    val parts = mutableListOf<ByteArray>()
 
-    val payloads = mutableListOf<ByteArray>()
     // Упрощенный цикл чтения (читаем кусками и анализируем)
     while (socket.isConnected && (System.currentTimeMillis() - startTime < 10_000)) {
-        if (input.available() < 4) {
+        val available = input.available()
+        if (available < 4) {
             Thread.sleep(100)
+            println("available is lower than 4: $available")
             continue
         }
 
         val len = input.readInt()
         if (len <= 0) {
+            println("len = $len")
             continue
         }
 
@@ -244,6 +247,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
             input.readFully(payload)
 
             if (extMsgId == 0) { // Handshake response
+                println("HANDSHAKE data")
                 val text = String(payload, StandardCharsets.ISO_8859_1)
                 val key = "ut_metadatai"
                 val idx = text.indexOf(key)
@@ -268,20 +272,23 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
                     output.flush()
                 }
             } else if (extMsgId == 1) { // Payload data
+                println("PAYLOAD data")
                 val str = String(payload, StandardCharsets.ISO_8859_1)
                 val splitMark = "ee"
                 val splitIdx = str.indexOf(splitMark)
 
                 if (splitIdx != -1) {
-                    socket.close()
+//                    socket.close()
                     val rawDataStart = splitIdx + 2
-                    println("sort of not null result: $str")
                     val payloadBytes = payload.copyOfRange(rawDataStart, payload.size)
-                    payloads.add(payloadBytes)
-                    return payloadBytes
+                    parts.add(payloadBytes)
+//                    return payloadBytes
                 }
+            } else {
+                println("OTHER DATA")
             }
         } else {
+            println("SKIPPING DATA $len")
             // Skip other messages
             if (len > 1) {
                 // skipBytes не всегда пропускает всё, лучше читать
@@ -294,9 +301,6 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
         }
     }
     socket.close()
-    if (payloads.isNotEmpty()) {
-        return payloads.first()
-    }
     println("Fully cycled - no result")
-    return null
+    return parts.firstOrNull()
 }
