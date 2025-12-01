@@ -52,7 +52,7 @@ fun pocGetTorrentFile(magnetLinkRaw: String): ByteArray {
                 File(fileName).writeBytes(metadataBytes)
                 println("\n>>> SUCCESS! Saved to: ${File(fileName).absolutePath}")
                 println(">>> Metadata file size: ${metadataBytes.size} bytes")
-                findContentSize(File(fileName))
+//                findContentSize(File(fileName))
                 return metadataBytes
             } 
         } catch (e: Exception) {
@@ -174,7 +174,7 @@ fun findByteArray(source: ByteArray, match: ByteArray): Int {
 fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): ByteArray? {
     val socket = Socket()
     try {
-        socket.connect(peer, 3000) // Быстрый коннект
+        socket.connect(peer, 7_000) // Быстрый коннект
     } catch (e: Exception) {
         println("Peer is DEAD: ${peer.hostName}")
         return null // Пир мертв
@@ -228,6 +228,7 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
 
     val startTime = System.currentTimeMillis()
 
+    val payloads = mutableListOf<ByteArray>()
     // Упрощенный цикл чтения (читаем кусками и анализируем)
     while (socket.isConnected && (System.currentTimeMillis() - startTime < 10_000)) {
         if (input.available() < 4) {
@@ -241,10 +242,10 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
         }
 
         val msgId = input.readByte().toInt()
-
+        
         if (msgId == 20) { // Extension
             val extMsgId = input.readByte().toInt()
-            val payloadLen = len - 2
+            val payloadLen = len - 2 // минус два потому что считали 2 байта перед этим
             val payload = ByteArray(payloadLen)
             input.readFully(payload)
 
@@ -280,8 +281,10 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
                 if (splitIdx != -1) {
                     socket.close()
                     val rawDataStart = splitIdx + 2
-                    println("sort of not null result")
-                    return payload.copyOfRange(rawDataStart, payload.size)
+                    println("sort of not null result: $str")
+                    val payloadBytes = payload.copyOfRange(rawDataStart, payload.size)
+                    payloads.add(payloadBytes)
+                    return payloadBytes
                 }
             }
         } else {
@@ -297,6 +300,9 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
         }
     }
     socket.close()
+    if (payloads.isNotEmpty()) {
+        return payloads.first()
+    }
     println("Fully cycled - no result")
     return null
 }
