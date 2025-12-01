@@ -1,6 +1,9 @@
 package com.lomovtsev.home.bot.magnet
 
+import java.io.File
 import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
+import java.util.stream.Stream
 
 data class MagnetLink(
     val origin: String,
@@ -13,10 +16,17 @@ data class MagnetLink(
         return 0L
     }
     
+    val prefix = "d4:info".toByteArray(StandardCharsets.ISO_8859_1)
+    val suffix = "e".toByteArray(StandardCharsets.ISO_8859_1)
+    
     fun getTorrentFile(): TorrentFile {
         val torrentFileBytes = pocGetTorrentFile(origin)
         
-        error("TODO")
+        val result = listOf(prefix, torrentFileBytes, suffix).reduce { acc, next -> acc + next }
+
+        val fileName = "${getHashHex()}.torrent"
+        File(fileName).writeBytes(result)
+        return parseTorrentFile(result)
     }
     
     fun getHashHexBytes(): ByteArray {
