@@ -18,17 +18,8 @@ data class MagnetLink(
         val torrentFileBytes = pocGetTorrentFile(origin)
         
         val result = listOf(prefix, torrentFileBytes, suffix).reduce { acc, next -> acc + next }
-
-        val fileName = "${getHashHex()}.torrent"
-        File(fileName).writeBytes(result)
-        writeOrigin(torrentFileBytes)
+        
         return parseTorrentFile(result)
-    }
-    
-    private fun writeOrigin(bytes: ByteArray) {
-
-        val fileName = "${getHashHex()}-origin.torrent"
-        File(fileName).writeBytes(bytes)
     }
     
     fun getHashHexBytes(): ByteArray {
