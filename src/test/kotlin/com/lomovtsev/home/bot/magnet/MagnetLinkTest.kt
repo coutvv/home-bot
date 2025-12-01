@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets
 class MagnetLinkTest {
     
     @Test
-    fun testGettingTorrentSize() {
+    fun testGettingLargeTorrent() {
         val rawLink = "magnet:?xt=urn:btih:56CE67EA9542281819287A31A1EB6DE1C0A5545F" +
                 "&tr=http%3A%2F%2Fbt.t-ru.org%2Fann%3Fmagnet" +
                 "&dn=%D0%9C%D1%83%D0%BD%D0%B4%D0%BE%D0%BB%D1%8C%D1%84%20%2F%20" +
@@ -19,7 +19,7 @@ class MagnetLinkTest {
         
         val torrent = magnetLink.getTorrentFile()
         
-        assertEquals(184950841994L, torrent.size)
+        assertEquals(184950882954L, torrent.size)
     }
     
     @Test

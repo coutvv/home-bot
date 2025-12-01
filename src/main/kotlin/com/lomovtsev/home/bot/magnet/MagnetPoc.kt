@@ -6,6 +6,7 @@ import java.io.IOException
 import java.net.*
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import kotlin.math.ceil
 
 const val TIMEOUT_MS = 5_000
 
@@ -223,6 +224,11 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     
     val parts = mutableListOf<ByteArray>()
 
+    // Буфер для сборки итогового файла
+    var finalMetadataBuffer: ByteArray? = null
+    var piecesReceived = 0
+    var totalPieces = 0
+
     // Упрощенный цикл чтения (читаем кусками и анализируем)
     while (socket.isConnected && (System.currentTimeMillis() - startTime < 10_000)) {
         val available = input.available()
@@ -261,28 +267,60 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
                     val idStr = text.substring(startIdx, endIdx)
                     metadataId = idStr.toInt()
 
+                    val decodedPayload = BDecoder(payload).decode() as Map<*, *>
+                    val metadataSize = decodedPayload["metadata_size"] as? Long ?: 0L
+                    
+                    // Инициализируем буфер
+                    finalMetadataBuffer = ByteArray(metadataSize.toInt())
+                    // Считаем сколько кусков по 16кб нам нужно
+                    totalPieces = ceil(metadataSize.toDouble() / METADATA_BLOCK_SIZE).toInt()
+                    println("Total pieces to download: $totalPieces")
+                    
                     // Request Metadata piece 0
-                    val req = "d8:msg_typei0e5:piecei0ee".toByteArray()
-                    val reqPacket = ByteBuffer.allocate(4 + 1 + 1 + req.size)
-                    reqPacket.putInt(1 + 1 + req.size)
-                    reqPacket.put(20.toByte())
-                    reqPacket.put(metadataId.toByte())
-                    reqPacket.put(req)
-                    output.write(reqPacket.array())
-                    output.flush()
+                    requestMetadataPiece(output, metadataId, 0)
                 }
-            } else if (extMsgId == 1) { // Payload data
-                println("PAYLOAD data")
-                val str = String(payload, StandardCharsets.ISO_8859_1)
-                val splitMark = "ee"
-                val splitIdx = str.indexOf(splitMark)
+            } else if (extMsgId == 1) { // Payload data PIECE!
+                println("payload data piCE!")
+                val textHeader = String(payload, StandardCharsets.ISO_8859_1)
+                val pieceKey = "piecei"
+                val pIdx = textHeader.indexOf(pieceKey)
+                if (pIdx != -1) {
+                    val start = pIdx + pieceKey.length
+                    val end = textHeader.indexOf("e", start)
+                    val pieceIndex = textHeader.substring(start, end).toInt()
 
-                if (splitIdx != -1) {
-//                    socket.close()
-                    val rawDataStart = splitIdx + 2
-                    val payloadBytes = payload.copyOfRange(rawDataStart, payload.size)
-                    parts.add(payloadBytes)
-//                    return payloadBytes
+                    // Ищем конец словаря "ee". 
+                    // Это "грязный" хак, но для PoC сойдет. В идеале нужен B-decode парсер.
+                    // Обычно заголовок заканчивается на "ee" перед данными.
+                    val splitMark = "ee"
+                    val splitIdx = textHeader.indexOf(splitMark)
+
+                    if (splitIdx != -1) {
+                        val headerSize = splitIdx + 2 // +2 байта на "ee"
+                        val dataSize = payload.size - headerSize
+
+                        // Копируем данные в правильное место буфера
+                        if (finalMetadataBuffer != null) {
+                            val offset = pieceIndex * METADATA_BLOCK_SIZE
+                            // Защита от переполнения (последний кусок может быть меньше)
+                            val lengthToCopy = minOf(dataSize, finalMetadataBuffer.size - offset)
+
+                            System.arraycopy(payload, headerSize, finalMetadataBuffer, offset, lengthToCopy)
+
+                            piecesReceived++
+                            println("Received piece $pieceIndex / $totalPieces (${piecesReceived} total)")
+
+                            if (piecesReceived == totalPieces) {
+                                println(">>> Metadata download complete!")
+                                socket.close()
+                                return finalMetadataBuffer
+                            } else {
+                                // Если скачали не всё, запрашиваем СЛЕДУЮЩИЙ кусок
+                                // (Простой вариант: последовательно)
+                                requestMetadataPiece(output, metadataId, pieceIndex + 1)
+                            }
+                        }
+                    }
                 }
             } else {
                 println("OTHER DATA")
@@ -304,3 +342,19 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     println("Fully cycled - no result")
     return parts.firstOrNull()
 }
+
+
+fun requestMetadataPiece(output: java.io.OutputStream, metadataId: Int, pieceIndex: Int) {
+    // msg_type = 0 (request), piece = index
+    val req = "d8:msg_typei0e5:piecei${pieceIndex}ee".toByteArray()
+    val reqPacket = ByteBuffer.allocate(4 + 1 + 1 + req.size)
+    reqPacket.putInt(1 + 1 + req.size)
+    reqPacket.put(20.toByte())       // BT Extended
+    reqPacket.put(metadataId.toByte()) // ID для ut_metadata
+    reqPacket.put(req)
+    output.write(reqPacket.array())
+    output.flush()
+}
+
+// Размер блока метаданных по стандарту BEP 09
+const val METADATA_BLOCK_SIZE = 16384 
