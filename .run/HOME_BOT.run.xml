@@ -1,0 +1,16 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="HOME_BOT" type="JetRunConfigurationType">
+    <envs>
+      <env name="QBIT_PASSWORD" value="" />
+      <env name="QBIT_URL" value="http://localhost:9090" />
+      <env name="QBIT_USERNAME" value="admin" />
+      <env name="TELEGRAM_TOKEN" value="" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="com.lomovtsev.home.bot.MainKt" />
+    <module name="home-bot" />
+    <shortenClasspath name="NONE" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

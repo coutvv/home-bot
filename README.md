@@ -11,3 +11,8 @@ QBIT_URL=
 QBIT_PASSWORD=
 QBIT_USERNAME=
 ```
+
+### Torrent metadata info
+
+For debugging getting torrent metadata info use:
+https://github.com/Chocobo1/bencode_online
