@@ -34,7 +34,7 @@ class MagnetLinkTest {
     }
 
     @Test
-    fun testMovieTorrent() {
+    fun testLinuxTorrent() {
         val link = "magnet:?xt=urn:btih:22823F73FA7800632EFD20A11C727FB33933BD47" +
                 "&tr=http%3A%2F%2Fbt3.t-ru.org%2Fann%3Fmagnet" +
                 "&dn=%5Bamd64%5D%20Astra%20Linux%20Special%20Edition%201.7.8"
