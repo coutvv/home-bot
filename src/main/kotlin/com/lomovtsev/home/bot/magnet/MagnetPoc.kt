@@ -231,11 +231,12 @@ fun downloadMetadataFromPeer(peer: InetSocketAddress, infoHash: ByteArray): Byte
     var totalPieces = 0
 
     // Упрощенный цикл чтения (читаем кусками и анализируем)
-    // TODO: replace timeout with  other approach
-    while (socket.isConnected && (System.currentTimeMillis() - startTime < 30_000)) {
+    var sleepTime = 0L
+    while (socket.isConnected && sleepTime < 5_000L) {
         val available = input.available()
         if (available < 4) {
             Thread.sleep(100)
+            sleepTime += 100
             continue
         }
 
