@@ -5,14 +5,16 @@ import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
 import com.lomovtsev.home.bot.magnet.parseMagnet
+import com.lomovtsev.home.bot.vpn.checker.UrlProbe
 import java.io.File
 
 val masterIds = setOf(127769371L, 321992164L)
+const val masterChatId = 127769371L
 
 fun main() {
 
     val qbitClient = QBitClient()
-
+    lateinit var urlProbe: UrlProbe
     val bot = bot {
         token = System.getenv("TELEGRAM_TOKEN")
         dispatch {
@@ -25,6 +27,11 @@ fun main() {
                     return@message
                 }
                 val text = message.text ?: return@message
+                if (text.startsWith("/probevpn") && message.chat.id == masterChatId) {
+                    urlProbe.startSiteChecker()
+                    bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Start probing VPN")
+                    return@message
+                }
                 if (!text.startsWith("magnet:?")) {
                     bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet-ссылку")
                     return@message
@@ -35,6 +42,10 @@ fun main() {
             }
         }
     }
+    val url = System.getenv("PROBE_URL") ?: "https://lomovtsev.com"
+    urlProbe = UrlProbe(bot, url, masterChatId)
+    urlProbe.startSiteChecker()
+    
     println("Bot created and started!")
     bot.startPolling()
 }

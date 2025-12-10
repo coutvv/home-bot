@@ -10,6 +10,7 @@ TELEGRAM_TOKEN=
 QBIT_URL=
 QBIT_PASSWORD=
 QBIT_USERNAME=
+PROBE_URL=https://lomovtsev.com
 ```
 
 ### Torrent metadata info
