@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Зонд для проверки доступности URL
@@ -20,10 +21,12 @@ class UrlProbe(
     private val enable: AtomicBoolean = AtomicBoolean(),
 ) {
     private val client = OkHttpClient()
+    private val failCounter = AtomicInteger(0)
 
     fun startSiteChecker() {
         if (enable.get()) {
             println("Probe already started!")
+            bot.sendMessage(ChatId.fromId(chatId), text = "Probing is already started!")
             return
         }
         enable.set(true)
@@ -39,19 +42,24 @@ class UrlProbe(
                 try {
                     val response = client.newCall(request).execute()
                     if (response.code() == 200) {
-                        // skip
+                        failCounter.set(0)
                     } else {
-                        println("Site $url is unavailable")
-                        enable.set(false)
-                        bot.sendMessage(ChatId.fromId(chatId), text = "Probe is failed my lord!")
+                        failCheck()
                     }
                     delay(30_000)
                 } catch (_: Exception) {
-                    println("Site $url is unavailable")
-                    enable.set(false)
-                    bot.sendMessage(ChatId.fromId(chatId), text = "Probe is failed my lord!")
+                    failCheck()
                 }
             }
+        }
+    }
+    
+    private fun failCheck() {
+        failCounter.incrementAndGet()
+        println("Site $url is unavailable")
+        if (failCounter.get() >= 3) {
+            enable.set(false)
+            bot.sendMessage(ChatId.fromId(chatId), text = "Probe is failed my lord!")
         }
     }
 }
