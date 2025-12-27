@@ -32,6 +32,15 @@ fun main() {
                     bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Start probing VPN")
                     return@message
                 }
+                if (text.startsWith("/available")) {
+                    val path = File("/")
+                    val usableSpace = path.usableSpace
+                    bot.sendMessage(
+                        chatId = ChatId.fromId(message.chat.id),
+                        text = "Свободного места в корне: $usableSpace"
+                    )
+                    return@message
+                }
                 if (!text.startsWith("magnet:?")) {
                     bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet-ссылку")
                     return@message
