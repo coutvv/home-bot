@@ -4,6 +4,7 @@ import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
+import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
 import com.lomovtsev.home.bot.vpn.checker.UrlProbe
 import java.io.File
@@ -34,7 +35,7 @@ fun main() {
                 }
                 if (text.startsWith("/available")) {
                     val path = File("/")
-                    val usableSpace = path.usableSpace
+                    val usableSpace = getBeautifulSize(path.usableSpace)
                     bot.sendMessage(
                         chatId = ChatId.fromId(message.chat.id),
                         text = "Свободного места в корне: $usableSpace"
@@ -72,7 +73,7 @@ fun tryAddTorrent(qbitClient: QBitClient, text: String): String {
             return "Ошибка, братишка! Что-то с QBittorrent'ом"
         }
         return "Добавил файлик: ${torrentFile.name} \n" +
-                "Размер: ${torrentFile.getBeautifulSize()}"
+                "Размер: ${getBeautifulSize(torrentFile.size)}"
     } catch (e: Exception) {
         return "Не смог распарсить, но добавил в загрузочки. Ошибка:\n${e.message}"
     }
