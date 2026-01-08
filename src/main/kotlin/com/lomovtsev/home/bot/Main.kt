@@ -2,8 +2,11 @@ package com.lomovtsev.home.bot
 
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
+import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
+import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
 import com.lomovtsev.home.bot.vpn.checker.UrlProbe
@@ -18,11 +21,32 @@ fun main() {
     lateinit var urlProbe: UrlProbe
     val bot = bot {
         token = System.getenv("TELEGRAM_TOKEN")
+
         dispatch {
+            callbackQuery {
+                val chatId = callbackQuery.message!!.chat.id
+                val chat = ChatId.fromId(chatId)
+                when (callbackQuery.data) {
+                    "AVAILABLE" -> {
+                        val path = File("/")
+                        val usableSpace = getBeautifulSize(path.usableSpace)
+                        bot.sendMessage(
+                            chatId = chat,
+                            text = "Свободного места в корне: $usableSpace"
+                        )
+                    }
+                    "PROBING" -> {
+                        urlProbe.startSiteChecker()
+                        bot.sendMessage(chatId = chat, text = "Start probing VPN")
+                    }
+                }
+            }
             message {
+                val chatId = message.chat.id
+                val chatIdentity = ChatId.fromId(chatId)
                 if (!masterIds.contains(message.from!!.id)) {
                     bot.sendMessage(
-                        chatId = ChatId.fromId(message.chat.id),
+                        chatId = chatIdentity,
                         text = "You are not my master!"
                     )
                     return@message
@@ -30,32 +54,49 @@ fun main() {
                 val text = message.text ?: return@message
                 if (text.startsWith("/probevpn") && message.chat.id == masterChatId) {
                     urlProbe.startSiteChecker()
-                    bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Start probing VPN")
+                    bot.sendMessage(chatId = chatIdentity, text = "Start probing VPN")
                     return@message
                 }
                 if (text.startsWith("/available")) {
                     val path = File("/")
                     val usableSpace = getBeautifulSize(path.usableSpace)
                     bot.sendMessage(
-                        chatId = ChatId.fromId(message.chat.id),
+                        chatId = chatIdentity,
                         text = "Свободного места в корне: $usableSpace"
                     )
                     return@message
                 }
                 if (!text.startsWith("magnet:?")) {
-                    bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Привет! Дай magnet-ссылку")
+                    val keyboard = InlineKeyboardMarkup.create(
+                        listOf(
+                            InlineKeyboardButton.CallbackData(
+                                text = "Доступное место",
+                                callbackData = "AVAILABLE"
+                            ),
+                            InlineKeyboardButton.CallbackData(
+                                text = "Зачекать сайтец",
+                                callbackData = "PROBING",
+                            )
+                        )
+                    )
+                    bot.sendMessage(
+                        chatId = chatIdentity,
+                        text = "Привет! Дай magnet-ссылку или нажми кнопку",
+                        replyMarkup = keyboard
+                    )
                     return@message
                 }
-                bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = "Ща попробую добавить...")
+                bot.sendMessage(chatId = chatIdentity, text = "Ща попробую добавить...")
                 val responseMessage = tryAddTorrent(qbitClient, text)
-                bot.sendMessage(chatId = ChatId.fromId(message.chat.id), text = responseMessage)
+                bot.sendMessage(chatId = chatIdentity, text = responseMessage)
             }
         }
     }
+
     val url = System.getenv("PROBE_URL") ?: "https://lomovtsev.com"
     urlProbe = UrlProbe(bot, url, masterChatId)
     urlProbe.startSiteChecker()
-    
+
     println("Bot created and started!")
     bot.startPolling()
 }
@@ -68,7 +109,7 @@ fun tryAddTorrent(qbitClient: QBitClient, text: String): String {
         if (torrentFile.size > getFreeSpace() - oneGigabyte) {
             return "Не могу слишком большой файл! Места нет"
         }
-        val ok = qbitClient.addTorrent(text) 
+        val ok = qbitClient.addTorrent(text)
         if (!ok) {
             return "Ошибка, братишка! Что-то с QBittorrent'ом"
         }
@@ -84,4 +125,4 @@ fun getFreeSpace(): Long {
     return file.freeSpace
 }
 
-const val oneGigabyte = 1024*1024*1024
+const val oneGigabyte = 1024 * 1024 * 1024
