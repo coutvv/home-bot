@@ -11,6 +11,9 @@ import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
 import com.lomovtsev.home.bot.vpn.checker.UrlProbe
 import java.io.File
+import java.net.InetSocketAddress
+import java.net.Proxy
+import java.net.URI
 
 val masterIds = setOf(127769371L, 321992164L)
 const val masterChatId = 127769371L
@@ -21,6 +24,12 @@ fun main() {
     lateinit var urlProbe: UrlProbe
     val bot = bot {
         token = System.getenv("TELEGRAM_TOKEN")
+        val telegramProxy = System.getenv("TELEGRAM_PROXY_URL")
+        if (telegramProxy != null && telegramProxy.isNotEmpty()) {
+            val uri = URI(telegramProxy)
+            proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(uri.host, uri.port))
+            println("Telegram Bot will use http PROXY")
+        }
 
         dispatch {
             callbackQuery {

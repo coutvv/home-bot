@@ -11,6 +11,8 @@ QBIT_URL=
 QBIT_PASSWORD=
 QBIT_USERNAME=
 PROBE_URL=https://lomovtsev.com
+# Http Proxy for getting access to telegram (Optional)
+TELEGRAM_PROXY_URL=http://localhost:2081
 ```
 
 ### Torrent metadata info
