@@ -41,10 +41,6 @@ class RutrackerClient(
             .addQueryParameter("nm", query)
             .build()
         val html = fetchHtml(buildGet(url), "search")
-        if (!html.contains(username)) {
-            println("There is problem with search")
-            println(html)
-        }
         return parseSearchHtml(html, limit)
     }
 
@@ -68,6 +64,9 @@ class RutrackerClient(
             return
         }
         validCreds = checkAccess()
+        if (!validCreds) {
+            println("Problem with accessing rutracker pages $cookie")
+        }
     }
 
     private fun checkAccess(): Boolean {
