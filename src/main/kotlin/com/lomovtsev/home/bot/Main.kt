@@ -1,5 +1,6 @@
 package com.lomovtsev.home.bot
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
@@ -169,7 +170,7 @@ private fun buildRutrackerClient(): RutrackerClient? {
 }
 
 private fun handleRutrackerSearch(
-    bot: com.github.kotlintelegrambot.Bot,
+    bot: Bot,
     chat: ChatId,
     client: RutrackerClient?,
     query: String,
@@ -212,7 +213,7 @@ private fun handleRutrackerSearch(
 }
 
 private fun handleRutrackerPick(
-    bot: com.github.kotlintelegrambot.Bot,
+    bot: Bot,
     chat: ChatId,
     client: RutrackerClient?,
     qbit: QBitClient,
