@@ -1,14 +1,17 @@
 package com.lomovtsev.home.bot
 
+import com.github.kotlintelegrambot.Bot
 import com.github.kotlintelegrambot.bot
 import com.github.kotlintelegrambot.dispatch
 import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
+import com.lomovtsev.home.bot.rutracker.RutrackerClient
 import com.lomovtsev.home.bot.vpn.checker.UrlProbe
 import java.io.File
 import java.net.InetSocketAddress
@@ -21,6 +24,7 @@ const val masterChatId = 127769371L
 fun main() {
 
     val qbitClient = QBitClient()
+    val rutrackerClient = buildRutrackerClient()
     lateinit var urlProbe: UrlProbe
     val bot = bot {
         token = System.getenv("TELEGRAM_TOKEN")
@@ -44,9 +48,18 @@ fun main() {
                             text = "Свободного места в корне: $usableSpace"
                         )
                     }
+
                     "PROBING" -> {
                         urlProbe.startSiteChecker()
                         bot.sendMessage(chatId = chat, text = "Start probing VPN")
+                    }
+
+                    else -> {
+                        val data = callbackQuery.data
+                        if (data.startsWith("RT:")) {
+                            val topicId = data.removePrefix("RT:")
+                            handleRutrackerPick(bot, chat, rutrackerClient, qbitClient, topicId)
+                        }
                     }
                 }
             }
@@ -64,6 +77,15 @@ fun main() {
                 if (text.startsWith("/probevpn") && message.chat.id == masterChatId) {
                     urlProbe.startSiteChecker()
                     bot.sendMessage(chatId = chatIdentity, text = "Start probing VPN")
+                    return@message
+                }
+                if (text.startsWith("/search")) {
+                    val query = text.removePrefix("/search").trim()
+                    if (query.isEmpty()) {
+                        bot.sendMessage(chatIdentity, "Использование: /search <запрос>")
+                        return@message
+                    }
+                    handleRutrackerSearch(bot, chatIdentity, rutrackerClient, query)
                     return@message
                 }
                 if (text.startsWith("/available")) {
@@ -90,7 +112,7 @@ fun main() {
                     )
                     bot.sendMessage(
                         chatId = chatIdentity,
-                        text = "Привет! Дай magnet-ссылку или нажми кнопку",
+                        text = "Привет! Дай magnet-ссылку, /search <запрос> или нажми кнопку",
                         replyMarkup = keyboard
                     )
                     return@message
@@ -135,3 +157,79 @@ fun getFreeSpace(): Long {
 }
 
 const val oneGigabyte = 1024 * 1024 * 1024
+
+private fun buildRutrackerClient(): RutrackerClient? {
+    val user = System.getenv("RUTRACKER_USERNAME")
+    if (user.isNullOrEmpty()) {
+        println("RUTRACKER_USERNAME/RUTRACKER_PASSWORD not set — search disabled")
+        return null
+    }
+    val proxy = System.getenv("RUTRACKER_PROXY_URL")
+    val cookie = System.getenv("RUTRACKER_COOKIE")
+    return RutrackerClient(user, proxy, cookie)
+}
+
+private fun handleRutrackerSearch(
+    bot: Bot,
+    chat: ChatId,
+    client: RutrackerClient?,
+    query: String,
+) {
+    if (client == null) {
+        bot.sendMessage(chat, "Поиск отключён: задай RUTRACKER_USERNAME/RUTRACKER_PASSWORD")
+        return
+    }
+    bot.sendMessage(chat, "Ищу на rutracker: $query")
+    val results = try {
+        client.search(query)
+    } catch (e: Exception) {
+        bot.sendMessage(chat, "Ошибочка произошла: ${e.message}")
+        return
+    }
+    if (results.isEmpty()) {
+        bot.sendMessage(chat, "Ничего не найдено")
+        return
+    }
+    val text = buildString {
+        results.forEachIndexed { i, r ->
+            append(
+                """
+                ${i + 1}. (${r.seeds}, ${r.leeches}) | ${r.addedDate} | <b>${r.size}</b>
+                ${r.title}
+                
+                
+                """.trimIndent()
+            )
+        }
+    }
+    val buttons = results.mapIndexed { i, r ->
+        InlineKeyboardButton.CallbackData(
+            text = "${i + 1} (${r.seeds}, ${r.leeches})",
+            callbackData = "RT:${r.topicId}"
+        )
+    }.chunked(5)
+    val keyboard = InlineKeyboardMarkup.create(buttons)
+    bot.sendMessage(chatId = chat, text = text, replyMarkup = keyboard, parseMode = ParseMode.HTML)
+}
+
+private fun handleRutrackerPick(
+    bot: Bot,
+    chat: ChatId,
+    client: RutrackerClient?,
+    qbit: QBitClient,
+    topicId: String,
+) {
+    if (client == null) {
+        bot.sendMessage(chat, "Поиск отключён")
+        return
+    }
+    bot.sendMessage(chat, "Беру magnet с rutracker...")
+    val magnet = try {
+        client.getMagnet(topicId)
+    } catch (e: Exception) {
+        bot.sendMessage(chat, "Не удалось достать magnet: ${e.message}")
+        return
+    }
+    val response = tryAddTorrent(qbit, magnet)
+    bot.sendMessage(chat, response)
+}

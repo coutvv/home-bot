@@ -13,7 +13,19 @@ QBIT_USERNAME=
 PROBE_URL=https://lomovtsev.com
 # Http Proxy for getting access to telegram (Optional)
 TELEGRAM_PROXY_URL=http://localhost:2081
+# Rutracker.org credentials for `/search` (Optional — without them search is disabled)
+RUTRACKER_USERNAME=
+RUTRACKER_PASSWORD=
+# Http Proxy for rutracker (Optional, needed if rutracker is blocked)
+RUTRACKER_PROXY_URL=http://localhost:2081
 ```
+
+### Commands
+
+- send `magnet:?...` link — bot adds it to qBittorrent
+- `/search <query>` — search rutracker.org, pick a result via inline buttons to add it to qBittorrent
+- `/available` — show free disk space
+- `/probevpn` — probe the configured `PROBE_URL`
 
 ### Torrent metadata info
 
