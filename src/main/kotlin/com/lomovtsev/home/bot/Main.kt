@@ -6,6 +6,7 @@ import com.github.kotlintelegrambot.dispatcher.callbackQuery
 import com.github.kotlintelegrambot.dispatcher.message
 import com.github.kotlintelegrambot.entities.ChatId
 import com.github.kotlintelegrambot.entities.InlineKeyboardMarkup
+import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
@@ -46,10 +47,12 @@ fun main() {
                             text = "Свободного места в корне: $usableSpace"
                         )
                     }
+
                     "PROBING" -> {
                         urlProbe.startSiteChecker()
                         bot.sendMessage(chatId = chat, text = "Start probing VPN")
                     }
+
                     else -> {
                         val data = callbackQuery.data
                         if (data.startsWith("RT:")) {
@@ -156,13 +159,13 @@ const val oneGigabyte = 1024 * 1024 * 1024
 
 private fun buildRutrackerClient(): RutrackerClient? {
     val user = System.getenv("RUTRACKER_USERNAME")
-    val pass = System.getenv("RUTRACKER_PASSWORD")
-    if (user.isNullOrEmpty() || pass.isNullOrEmpty()) {
+    if (user.isNullOrEmpty()) {
         println("RUTRACKER_USERNAME/RUTRACKER_PASSWORD not set — search disabled")
         return null
     }
     val proxy = System.getenv("RUTRACKER_PROXY_URL")
-    return RutrackerClient(user, pass, proxy)
+    val cookie = System.getenv("RUTRACKER_COOKIE")
+    return RutrackerClient(user, proxy, cookie)
 }
 
 private fun handleRutrackerSearch(
@@ -179,8 +182,7 @@ private fun handleRutrackerSearch(
     val results = try {
         client.search(query)
     } catch (e: Exception) {
-        e.printStackTrace()
-        bot.sendMessage(chat, "Ошибочка произошла мэ: ${e.message}")
+        bot.sendMessage(chat, "Ошибочка произошла: ${e.message}")
         return
     }
     if (results.isEmpty()) {
@@ -189,18 +191,24 @@ private fun handleRutrackerSearch(
     }
     val text = buildString {
         results.forEachIndexed { i, r ->
-            append("${i + 1}. 🌱 ${r.seeds} | ${r.size}\n")
-            append("${r.title}\n\n")
+            append(
+                """
+                ${i + 1}. (${r.seeds}, ${r.leeches}) | ${r.addedDate} | <b>${r.size}</b>
+                ${r.title}
+                
+                
+                """.trimIndent()
+            )
         }
     }
     val buttons = results.mapIndexed { i, r ->
         InlineKeyboardButton.CallbackData(
-            text = "${i + 1} (🌱${r.seeds})",
+            text = "${i + 1} (${r.seeds}, ${r.leeches})",
             callbackData = "RT:${r.topicId}"
         )
     }.chunked(5)
     val keyboard = InlineKeyboardMarkup.create(buttons)
-    bot.sendMessage(chatId = chat, text = text, replyMarkup = keyboard)
+    bot.sendMessage(chatId = chat, text = text, replyMarkup = keyboard, parseMode = ParseMode.HTML)
 }
 
 private fun handleRutrackerPick(

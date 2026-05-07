@@ -5,23 +5,19 @@ import org.jsoup.Jsoup
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.URI
-import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
-
-data class RutrackerResult(
-    val topicId: String,
-    val title: String,
-    val size: String,
-    val seeds: Int,
-    val magnetLink: String?,
-)
 
 class RutrackerClient(
     private val username: String,
-    private val password: String,
     proxyUrl: String? = null,
     val cookie: String = ""
 ) {
+    companion object {
+        private const val HOST = "rutracker.org"
+        private const val USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 " +
+                "Firefox/152.0"
+    }
+    
     private val httpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
@@ -34,9 +30,9 @@ class RutrackerClient(
         .build()
 
     @Volatile
-    private var loggedIn: Boolean = false
+    private var validCreds: Boolean = false
 
-    fun search(query: String, limit: Int = 5): List<RutrackerResult> {
+    fun search(query: String, limit: Int = 10): List<RutrackerSearchResult> {
         ensureLoggedIn()
         val url = HttpUrl.Builder()
             .scheme("https")
@@ -64,8 +60,10 @@ class RutrackerClient(
 
     @Synchronized
     private fun ensureLoggedIn() {
-        if (loggedIn) return
-        loggedIn = checkAccess()
+        if (validCreds) {
+            return
+        }
+        validCreds = checkAccess()
     }
 
     private fun checkAccess(): Boolean {
@@ -80,28 +78,6 @@ class RutrackerClient(
         return resp.isSuccessful && resp.body()?.string()?.contains(username) ?: false
     }
 
-    // TODO: fix
-    private fun login() {
-        val body = FormBody.Builder(Charset.forName("windows-1251"))
-            .add("login_username", username)
-            .add("login_password", password)
-            .add("login", "Вход")
-            .build()
-        val request = Request.Builder()
-            .url("https://$HOST/forum/login.php")
-            .addHeader("Cookie", cookie)
-            .header("User-Agent", USER_AGENT)
-            .post(body)
-            .build()
-        val resp = httpClient.newCall(request).execute()
-        try {
-            require(resp.isSuccessful) { "login failed $resp" }
-        } finally {
-            resp.close()
-        }
-        loggedIn = true
-    }
-
     private fun fetchHtml(request: Request, label: String): String {
         val resp = httpClient.newCall(request).execute()
         try {
@@ -114,10 +90,11 @@ class RutrackerClient(
 
     private fun buildGet(url: HttpUrl): Request = Request.Builder()
         .url(url)
+        .header("Cookie", cookie)
         .header("User-Agent", USER_AGENT)
         .build()
 
-    private fun parseSearchHtml(html: String, limit: Int): List<RutrackerResult> {
+    private fun parseSearchHtml(html: String, limit: Int): List<RutrackerSearchResult> {
         val doc = Jsoup.parse(html)
         val rows = doc.select("tr.tCenter.hl-tr")
         return rows.asSequence()
@@ -127,36 +104,15 @@ class RutrackerClient(
                 val topicId = href.substringAfter("?t=", "").takeIf { it.isNotEmpty() }
                     ?: return@mapNotNull null
                 val title = titleA.text().trim()
-                val sizeBytes = row.selectFirst("td.tor-size a")?.text() ?: "unknown"
+                val size = row.selectFirst("td.tor-size a")?.text() ?: "unknown"
                 val seeds = row.selectFirst("b.seedmed")?.text()?.toIntOrNull() ?: 0
                 val magnet = row.selectFirst("a.magnet-link")?.attr("href")
-                RutrackerResult(topicId, title, sizeBytes, seeds, magnet)
+                val leeches = row.selectFirst("td.leechmed")?.text()?.toIntOrNull() ?: 0
+                val addedDate = row.selectFirst("td.row4.nowrap>p")?.text() ?: "unknown"
+                RutrackerSearchResult(topicId, title, size, seeds, leeches, addedDate, magnet)
             }
             .sortedByDescending { it.seeds }
             .take(limit)
             .toList()
-    }
-
-    companion object {
-        private const val HOST = "rutracker.org"
-        private const val USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 " +
-                "Firefox/152.0"
-    }
-}
-
-private class SimpleCookieJar : CookieJar {
-    private val store = mutableListOf<Cookie>()
-
-    @Synchronized
-    fun hasAnyCookies(): Boolean = store.isNotEmpty()
-
-    @Synchronized
-    override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        store.addAll(cookies)
-    }
-
-    @Synchronized
-    override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        return store.filter { it.matches(url) }
     }
 }
