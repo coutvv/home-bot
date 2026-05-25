@@ -8,4 +8,5 @@ data class RutrackerSearchResult(
     val leeches: Int,
     val addedDate: String,
     val magnetLink: String?,
+    val torrentLink: String?
 )

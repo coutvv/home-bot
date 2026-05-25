@@ -57,6 +57,17 @@ class RutrackerClient(
         return doc.selectFirst("a.magnet-link")?.attr("href")
             ?: error("magnet link not found for topic $topicId")
     }
+    
+    fun getTorrent(torrentLink: String): String {
+        // TODO: download torrent file via link
+
+        val url = HttpUrl.Builder()
+            .scheme("https")
+            .host(HOST)
+            .addPathSegments("forum/$torrentLink")
+            .build()
+        return ""
+    }
 
     @Synchronized
     private fun ensureLoggedIn() {
@@ -112,7 +123,8 @@ class RutrackerClient(
                 val magnet = row.selectFirst("a.magnet-link")?.attr("href")
                 val leeches = row.selectFirst("td.leechmed")?.text()?.toIntOrNull() ?: 0
                 val addedDate = row.selectFirst("td.row4.nowrap>p")?.text() ?: "unknown"
-                RutrackerSearchResult(topicId, title, size, seeds, leeches, addedDate, magnet)
+                val torrentFile = row.selectFirst("a.tr-dl.small")?.attr("href")
+                RutrackerSearchResult(topicId, title, size, seeds, leeches, addedDate, magnet, torrentFile)
             }
             .sortedByDescending { it.seeds }
             .take(limit)

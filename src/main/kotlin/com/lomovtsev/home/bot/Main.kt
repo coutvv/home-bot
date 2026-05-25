@@ -57,8 +57,10 @@ fun main() {
                     else -> {
                         val data = callbackQuery.data
                         if (data.startsWith("RT:")) {
-                            val topicId = data.removePrefix("RT:")
-                            handleRutrackerPick(bot, chat, rutrackerClient, qbitClient, topicId)
+                            val datas = data.removePrefix("RT:").split("|||")
+                            val topicId = datas[0]
+                            val torrentLink = datas[1]
+                            handleRutrackerPick(bot, chat, rutrackerClient, qbitClient, topicId, torrentLink)
                         }
                     }
                 }
@@ -205,7 +207,7 @@ private fun handleRutrackerSearch(
     val buttons = results.mapIndexed { i, r ->
         InlineKeyboardButton.CallbackData(
             text = "${i + 1} (${r.seeds}, ${r.leeches})",
-            callbackData = "RT:${r.topicId}"
+            callbackData = "RT:${r.topicId}|||${r.torrentLink}"
         )
     }.chunked(5)
     val keyboard = InlineKeyboardMarkup.create(buttons)
@@ -218,6 +220,7 @@ private fun handleRutrackerPick(
     client: RutrackerClient?,
     qbit: QBitClient,
     topicId: String,
+    torrentLink: String,
 ) {
     if (client == null) {
         bot.sendMessage(chat, "Поиск отключён")
@@ -225,11 +228,12 @@ private fun handleRutrackerPick(
     }
     bot.sendMessage(chat, "Беру magnet с rutracker...")
     val magnet = try {
-        client.getMagnet(topicId)
+        client.getTorrent(torrentLink)
     } catch (e: Exception) {
         bot.sendMessage(chat, "Не удалось достать magnet: ${e.message}")
         return
     }
     val response = tryAddTorrent(qbit, magnet)
+    // TODO: add torrent file instead of magnet
     bot.sendMessage(chat, response)
 }
