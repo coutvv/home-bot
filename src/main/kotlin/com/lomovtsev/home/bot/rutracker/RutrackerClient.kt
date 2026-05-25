@@ -58,15 +58,33 @@ class RutrackerClient(
             ?: error("magnet link not found for topic $topicId")
     }
     
-    fun getTorrent(torrentLink: String): String {
-        // TODO: download torrent file via link
-
-        val url = HttpUrl.Builder()
+    fun getTorrent(torrentLink: String): ByteArray {
+        ensureLoggedIn()
+        val path = torrentLink.substringBefore('?').removePrefix("/")
+        val query = torrentLink.substringAfter('?', "")
+        val urlBuilder = HttpUrl.Builder()
             .scheme("https")
             .host(HOST)
-            .addPathSegments("forum/$torrentLink")
+            .addPathSegments("forum/$path")
+        if (query.isNotEmpty()) {
+            query.split("&").forEach {
+                val (k, v) = it.split("=", limit = 2).let { p -> p[0] to (p.getOrNull(1) ?: "") }
+                urlBuilder.addQueryParameter(k, v)
+            }
+        }
+        val request = Request.Builder()
+            .url(urlBuilder.build())
+            .header("Cookie", cookie)
+            .header("User-Agent", USER_AGENT)
+            .header("Referer", "https://$HOST/forum/index.php")
             .build()
-        return ""
+        val resp = httpClient.newCall(request).execute()
+        try {
+            require(resp.isSuccessful) { "torrent download failed $resp" }
+            return resp.body()?.bytes() ?: error("empty torrent body")
+        } finally {
+            resp.close()
+        }
     }
 
     @Synchronized

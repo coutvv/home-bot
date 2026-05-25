@@ -11,6 +11,7 @@ import com.github.kotlintelegrambot.entities.ParseMode
 import com.github.kotlintelegrambot.entities.keyboard.InlineKeyboardButton
 import com.lomovtsev.home.bot.common.getBeautifulSize
 import com.lomovtsev.home.bot.magnet.parseMagnet
+import com.lomovtsev.home.bot.magnet.parseTorrentFile
 import com.lomovtsev.home.bot.rutracker.RutrackerClient
 import com.lomovtsev.home.bot.vpn.checker.UrlProbe
 import java.io.File
@@ -142,7 +143,7 @@ fun tryAddTorrent(qbitClient: QBitClient, text: String): String {
         if (torrentFile.size > getFreeSpace() - oneGigabyte) {
             return "Не могу слишком большой файл! Места нет"
         }
-        val ok = qbitClient.addTorrent(text)
+        val ok = qbitClient.addTorrentByMagnet(text)
         if (!ok) {
             return "Ошибка, братишка! Что-то с QBittorrent'ом"
         }
@@ -226,14 +227,30 @@ private fun handleRutrackerPick(
         bot.sendMessage(chat, "Поиск отключён")
         return
     }
-    bot.sendMessage(chat, "Беру magnet с rutracker...")
-    val magnet = try {
-        client.getTorrent(torrentLink)
+    val link = if (torrentLink.isEmpty() || torrentLink == "null") "dl.php?t=$topicId" else torrentLink
+    bot.sendMessage(chat, "Качаю .torrent с rutracker...")
+    val bytes = try {
+        client.getTorrent(link)
     } catch (e: Exception) {
-        bot.sendMessage(chat, "Не удалось достать magnet: ${e.message}")
+        bot.sendMessage(chat, "Не удалось скачать .torrent: ${e.message}")
         return
     }
-    val response = tryAddTorrent(qbit, magnet)
-    // TODO: add torrent file instead of magnet
+    val parsed = try {
+        parseTorrentFile(bytes)
+    } catch (e: Exception) {
+        bot.sendMessage(chat, "Не смог распарсить .torrent: ${e.message}")
+        return
+    }
+    if (parsed.size > getFreeSpace() - oneGigabyte) {
+        bot.sendMessage(chat, "Не могу слишком большой файл! Места нет")
+        return
+    }
+    val ok = qbit.addTorrentFile(bytes, "$topicId.torrent")
+    val response = if (ok) {
+        "Добавил файлик: ${parsed.name} \n" +
+                "Размер: ${getBeautifulSize(parsed.size)}"
+    } else {
+        "Ошибка, братишка! Что-то с QBittorrent'ом"
+    }
     bot.sendMessage(chat, response)
 }
