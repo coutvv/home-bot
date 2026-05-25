@@ -1,8 +1,6 @@
 package com.lomovtsev.home.bot
 
-import okhttp3.FormBody
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import okhttp3.*
 
 class QBitClient() {
 
@@ -10,16 +8,14 @@ class QBitClient() {
     private val password: String = System.getenv("QBIT_PASSWORD") ?: "password"
     private val qBitUrl: String = System.getenv("QBIT_URL") ?: "http://localhost:9090"
     private var cookies: String? = null
-    
+
     private val client = OkHttpClient()
-    
+
     init {
         auth()
     }
 
     fun auth(): String {
-
-        // 1) логин
         val loginReq = Request.Builder()
             .url("$qBitUrl/api/v2/auth/login")
             .header("Content-type", "application/x-www-form-urlencoded; charset=UTF-8")
@@ -45,13 +41,38 @@ class QBitClient() {
 
     }
 
-    fun addTorrent(magnet: String): Boolean {
+    fun addTorrentByMagnet(magnet: String): Boolean {
         val cookies = auth()
 
-        // 2) добавить торрент
         val addReq = Request.Builder()
             .url("$qBitUrl/api/v2/torrents/add")
             .post(FormBody.Builder().add("urls", magnet).build())
+            .header("Cookie", cookies)
+            .build()
+
+        val addResp = client.newCall(addReq).execute()
+        val result = addResp.isSuccessful
+        if (!result) {
+            auth()
+        }
+        return result
+    }
+
+    fun addTorrentFile(bytes: ByteArray, fileName: String = "file.torrent"): Boolean {
+        val cookies = auth()
+
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "torrents",
+                fileName,
+                RequestBody.create(MediaType.parse("application/x-bittorrent"), bytes)
+            )
+            .build()
+
+        val addReq = Request.Builder()
+            .url("$qBitUrl/api/v2/torrents/add")
+            .post(body)
             .header("Cookie", cookies)
             .build()
 
